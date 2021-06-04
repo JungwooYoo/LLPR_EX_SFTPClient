@@ -197,6 +197,7 @@ void MainWindow::configurationdlgview()
 
 void MainWindow::createcenter(int index)
 {
+    /*
     FtpClient *pftpclient = new FtpClient(index,plog);
     connect(pftpclient, SIGNAL(logappend(QString)),this,SLOT(logappend(QString)));
 
@@ -205,10 +206,21 @@ void MainWindow::createcenter(int index)
     plog->write(logstr,LOG_NOTICE);
     logappend(logstr);
     qDebug() << logstr;
+    */
+
+    SftpClient *psftpclient = new SftpClient(index,plog);
+    connect(psftpclient, SIGNAL(logappend(QString)),this,SLOT(logappend(QString)));
+
+    commonvalues::clientlist.append(psftpclient);
+    QString logstr = QString("SFTP Create : %1").arg(index);
+    plog->write(logstr,LOG_NOTICE);
+    logappend(logstr);
+    qDebug() << logstr;
 }
 
 void MainWindow::connectcenter(int index)
 {
+    /*
     FtpClient *pftpclient = commonvalues::clientlist.value(index);
 
     if(!pftpclient->isRunning())
@@ -217,6 +229,20 @@ void MainWindow::connectcenter(int index)
         QString logstr = QString("FTP Connect : %1(ip:%2,port:%3,centerName:%4,ProtocolType:%5, FTP Retry:%6)").arg(index)
                 .arg(pftpclient->config.ip).arg(pftpclient->config.ftpport).arg(pftpclient->config.centername)
                 .arg(pftpclient->config.protocol_type).arg(commonvalues::ftpretry);
+        plog->write(logstr,LOG_NOTICE);
+        logappend(logstr);
+        qDebug() << logstr;
+    }
+    */
+
+    SftpClient *psftpclient = commonvalues::clientlist.value(index);
+
+    if(!psftpclient->isRunning())
+    {
+        psftpclient->start(commonvalues::center_list.value(index));
+        QString logstr = QString("FTP Connect : %1(ip:%2,port:%3,centerName:%4,ProtocolType:%5, FTP Retry:%6)").arg(index)
+                .arg(psftpclient->config.ip).arg(psftpclient->config.ftpport).arg(psftpclient->config.centername)
+                .arg(psftpclient->config.protocol_type).arg(commonvalues::ftpretry);
         plog->write(logstr,LOG_NOTICE);
         logappend(logstr);
         qDebug() << logstr;

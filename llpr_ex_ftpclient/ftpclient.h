@@ -16,7 +16,7 @@ class FtpClient : public QThread
 {
     Q_OBJECT
 
-private:
+public:
     class SendFileInfo
     {
     public:
@@ -42,7 +42,7 @@ private:
         void RemoveFirstFile(SendFileInfo data);
         void ClearAll();
         int Count();
-    private:
+    public:
         QList<SendFileInfo> fileList;
         const int MAX_FILE = 10000;        
         QMutex mutex;

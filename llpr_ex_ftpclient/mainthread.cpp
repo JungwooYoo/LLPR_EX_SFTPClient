@@ -153,30 +153,6 @@ void mainthread::center_check()
 
             msleep(100);
             emit restart();
-
-//            int index;
-//            for(int i=client_count; i > count; i-- )
-//            {
-//                index = i-1;
-//                commonvalues::clientlist.value(index)->stop();
-
-//                quint64 closecount = 300;
-//                while(commonvalues::clientlist.value(index)->isRunning())
-//                {
-//                    msleep(10);
-//                    closecount--;
-//                    if(closecount < 1)
-//                    {
-//                        break;
-//                    }
-//                }
-//                QString logstr = QString("FTP Remove : %1").arg(i);
-//                qDebug() << logstr;
-//                log->write(logstr,LOG_NOTICE);
-
-//                commonvalues::clientlist.removeAt(index);
-//            }
-//            commonvalues::clientlist.clear();
         }
     }
 }

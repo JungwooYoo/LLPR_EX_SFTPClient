@@ -8,6 +8,7 @@
 #include "syslogger.h"
 #include "mainthread.h"
 #include "ftpclient.h"
+#include "sftpclient.h"
 
 namespace Ui {
 class MainWindow;

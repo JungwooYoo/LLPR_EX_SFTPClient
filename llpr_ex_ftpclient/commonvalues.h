@@ -5,6 +5,7 @@
 #include <QLabel>
 #include "dataclass.h"
 #include "ftpclient.h"
+#include "sftpclient.h"
 
 class commonvalues : public QObject
 {
@@ -15,7 +16,8 @@ public:
     /*        Center  value            */
        static int center_count;
        static QList<CenterInfo> center_list;
-       static QList<FtpClient *> clientlist;
+       //static QList<FtpClient *> clientlist;
+       static QList<SftpClient *> clientlist;
        enum FTPRetryType
        {
            FTPRetry_ON = 0x00,

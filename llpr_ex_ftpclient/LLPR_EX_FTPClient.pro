@@ -32,7 +32,8 @@ SOURCES += \
     commonvalues.cpp \
     syslogger.cpp \
     mainthread.cpp \
-    ftpclient.cpp
+    ftpclient.cpp \
+    sftpclient.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -43,7 +44,8 @@ HEADERS += \
     syslogger.h \
     mainthread.h \
     ftpclient.h \
-    dataclass.h
+    dataclass.h \
+    sftpclient.h
 
 FORMS += \
         mainwindow.ui \
@@ -52,3 +54,6 @@ FORMS += \
 
 
 CONFIG += c++11
+
+LIBS += \
+        /usr/lib/x86_64-linux-gnu/libssh2.so
