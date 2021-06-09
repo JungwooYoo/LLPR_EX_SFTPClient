@@ -35,12 +35,12 @@ public:
     bool connectSocket();
     bool initSession();
     bool initSFTP();
+
+    bool sendData();
     void closeSFTP();
     void closesession();
 
     void ScanSendDataFiles();
-    void DeleteFile(QString filepath);
-
 
 public:
     CenterInfo config;

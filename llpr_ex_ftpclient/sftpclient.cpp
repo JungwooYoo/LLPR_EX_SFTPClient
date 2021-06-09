@@ -65,17 +65,35 @@ void SftpClient::run()
     password = config.password.toStdString().c_str();
     sftppath = config.ftpPath.toStdString().c_str();
 
-    logstr = QString("ip : %1, username : %2, password : %3, sftppath : %4").arg(hostaddr).arg(username).arg(password).arg(sftppath);
-    log->write(logstr,LOG_NOTICE);
-    //qDebug() << logstr;
-    emit logappend(logstr);
-
     sshinit();
     connectSocket();
     initSession();
 
     while(brun)
     {
+        if(isRetry)
+        {
+            closesession();
+
+            if(!sshinit())
+            {
+                msleep(1000);
+                continue;
+            }
+
+            if(!connectSocket())
+            {
+                msleep(1000);
+                continue;
+            }
+
+            if(!initSession())
+            {
+                msleep(1000);
+                continue;
+            }
+        }
+
         if(config.protocol_type == CenterInfo::Remote)
         {
             msleep(500);
@@ -111,7 +129,6 @@ void SftpClient::run()
             QByteArray cvt;
             QString fpath = QString("%1/%2/").arg(commonvalues::FTPSavePath).arg(config.centername);
 
-            // Send
             lastTime = QDateTime::currentDateTime();
             QFile file(sftp_sendfileInfo.filepath);
             if(!file.open(QIODevice::ReadOnly))
@@ -122,9 +139,8 @@ void SftpClient::run()
 
             if(sftp_sendfileInfo.filename.mid(0,1).compare("M") != 0)
             {
-                if(sftp_sendfileInfo.filename.mid(0,1).compare("H") == 0)
-                    onlyfilename = rname;
-                else if(sftp_sendfileInfo.filename.mid(0,1).compare("X") == 0)
+                if(sftp_sendfileInfo.filename.mid(0,1).compare("H") == 0
+                        || sftp_sendfileInfo.filename.mid(0,1).compare("X") == 0)
                     onlyfilename = rname;
                 else
                     onlyfilename = sftp_sendfileInfo.filename;
@@ -139,14 +155,9 @@ void SftpClient::run()
             local = fopen(localfile, "rb");
 
             if(!local)
-            {
                 logstr = QString("SFTP : 파일 열기 실패..");
-                msleep(500);
-            }
             else
-            {
                 logstr = QString("SFTP : 파일 열기 성공!!");
-            }
 
             log->write(logstr,LOG_NOTICE);
             qDebug() << logstr;
@@ -155,52 +166,87 @@ void SftpClient::run()
 
             if(initSFTP())
             {
-                if(sftp_session != NULL && sftp_handle != NULL)
+                if(sendData())
                 {
-                    LIBSSH2_SFTP_ATTRIBUTES attrs;
-                    if(libssh2_sftp_fstat_ex(sftp_handle, &attrs, 0) < 0)
+                    if(sftp_session != NULL && sftp_handle != NULL)
                     {
-                        logstr = QString("SFTP : libssh2_sftp_fstat fail..");
+                        LIBSSH2_SFTP_ATTRIBUTES attrs;
+                        if(libssh2_sftp_fstat_ex(sftp_handle, &attrs, 0) < 0)
+                        {
+                            logstr = QString("SFTP : libssh2_sftp_fstat fail..");
+                            log->write(logstr, LOG_NOTICE);
+                            qDebug() << logstr;
+                            emit logappend(logstr);
+                        }
+                        else
+                        {
+                            libssh2_sftp_seek64(sftp_handle, attrs.filesize);
+                        }
+
+                        if(attrs.filesize > 0)
+                        {
+                            cvt = onlyfilename.toLocal8Bit();
+                            const char* srcname = cvt.data();
+
+                            cvt = sftp_sendfileInfo.filename.toLocal8Bit();
+                            const char* dstname = cvt.data();
+
+                            m_iFTPRename = libssh2_sftp_rename(sftp_session, srcname, dstname);
+
+                            if(m_iFTPRename == 0)
+                            {
+                                logstr = QString("SFTP 파일 이름변경 성공!! : %1 -> %2").arg(rname).arg(sftp_sendfileInfo.filename);
+                                log->write(logstr,LOG_NOTICE); qDebug() << logstr;
+                                emit logappend(logstr);
+                            }
+                            else
+                            {
+                                logstr = QString("SFTP 파일 이름변경 실패.. : %1 -> %2").arg(rname).arg(sftp_sendfileInfo.filename);
+                                log->write(logstr,LOG_NOTICE); qDebug() << logstr;
+                                emit logappend(logstr);
+
+                                // 동일 파일 삭제
+                                cvt = onlyfilename.toLocal8Bit();
+                                const char* delfilename = cvt.data();
+
+                                libssh2_sftp_unlink(sftp_session, delfilename);
+
+                                logstr = QString("SFTP 동일 파일 삭제 : %1").arg(onlyfilename);
+                                log->write(logstr,LOG_NOTICE); qDebug() << logstr;
+                                emit logappend(logstr);
+                            }
+
+                            file.close();
+                        }
+                    }
+
+                    sftp_sendfileInfolist.RemoveFirstFile(sftp_sendfileInfo);
+
+                    if(lastCount != sftp_sendfileInfolist.Count())
+                    {
+                        lastCount = sftp_sendfileInfolist.Count();
+                        logstr = QString("SFTP 전송 파일 리스트 : %1").arg(lastCount);
                         log->write(logstr, LOG_NOTICE);
                         qDebug() << logstr;
                         emit logappend(logstr);
-                    }
-                    else
-                    {
-                        libssh2_sftp_seek64(sftp_handle, attrs.filesize);
+
+                        msleep(500);
                     }
 
-                    if(attrs.filesize > 0)
-                    {
-                        cvt = onlyfilename.toLocal8Bit();
-                        const char* srcname = cvt.data();
-
-                        cvt = sftp_sendfileInfo.filename.toLocal8Bit();
-                        const char* dstname = cvt.data();
-
-                        libssh2_sftp_rename(sftp_session, srcname, dstname);
-                        logstr = QString("SFTP파일 이름변경 성공 : %1 -> %2").arg(rname).arg(sftp_sendfileInfo.filename);
-                        log->write(logstr,LOG_NOTICE); qDebug() << logstr;
-                        emit logappend(logstr);
-
-                        file.close();
-                    }
+                    isRetry = false;
                 }
-
-                sftp_sendfileInfolist.RemoveFirstFile(sftp_sendfileInfo);
+                else
+                {
+                    isRetry = true;
+                }
             }
-
-            if(lastCount != sftp_sendfileInfolist.Count())
+            else
             {
-                lastCount = sftp_sendfileInfolist.Count();
-                logstr = QString("SFTP전송 파일 리스트 : %1").arg(lastCount);
-                log->write(logstr, LOG_NOTICE);
-                qDebug() << logstr;
-                emit logappend(logstr);
-
-                msleep(500);
+                isRetry = true;
             }
         }
+
+        libssh2_sftp_close(sftp_handle);
     }
 }
 
@@ -295,17 +341,9 @@ bool SftpClient::initSession()
 
     if(auth_pw)
     {
-        logstr = QString("ip : %1, username : %2, password : %3, sftppath : %4").arg(hostaddr).arg(username).arg(password).arg(sftppath);
-        log->write(logstr,LOG_NOTICE);
-        qDebug() << logstr;
-        emit logappend(logstr);
-
         if(libssh2_userauth_password(session, username, password))
         {
             logstr = QString("SFTP : ID/PW 인증 실패..");
-            log->write(logstr,LOG_NOTICE);
-            qDebug() << logstr;
-            emit logappend(logstr);
             closesession();
 
             sessionSuc = false;
@@ -313,10 +351,11 @@ bool SftpClient::initSession()
         else
         {
             logstr = QString("SFTP : ID/PW 인증 성공!!");
-            log->write(logstr,LOG_NOTICE);
-            qDebug() << logstr;
-            emit logappend(logstr);
         }
+
+        log->write(logstr,LOG_NOTICE);
+        qDebug() << logstr;
+        emit logappend(logstr);
     }
 
     return sessionSuc;
@@ -324,12 +363,7 @@ bool SftpClient::initSession()
 
 bool SftpClient::initSFTP()
 {
-    int sendcount = 0;
     bool sftpSuc = false;
-
-    char mem[1024*100];
-    size_t nread;
-    char *ptr;
 
     sftp_session = libssh2_sftp_init(session);
 
@@ -350,9 +384,6 @@ bool SftpClient::initSFTP()
     if(!sftp_handle)
     {
         logstr = QString("SFTP : SFTP 연결 실패!!");
-        log->write(logstr,LOG_NOTICE);
-        qDebug() << logstr;
-        emit logappend(logstr);
         closesession();
 
         sftpSuc = false;
@@ -360,13 +391,26 @@ bool SftpClient::initSFTP()
     else
     {
         logstr = QString("SFTP : SFTP 연결 성공!!");
-        log->write(logstr,LOG_NOTICE);
-        qDebug() << logstr;
-        emit logappend(logstr);
 
         sftpSuc = true;
     }
 
+    log->write(logstr,LOG_NOTICE);
+    qDebug() << logstr;
+    emit logappend(logstr);
+
+    return sftpSuc;
+}
+
+bool SftpClient::sendData()
+{
+    bool sendSuc = false;
+    int sendcount = 0;
+    char mem[1024*100];
+    size_t nread;
+    char *ptr;
+
+    // 파일 전송
     do
     {
         nread = fread(mem, 1, sizeof(mem), local);
@@ -383,9 +427,11 @@ bool SftpClient::initSFTP()
             sendcount = libssh2_sftp_write(sftp_handle, ptr, nread);
             if(sendcount < 0)
             {
-                sftpSuc = false;
+                sendSuc = false;
                 break;
             }
+            else
+                sendSuc = true;
 
             ptr += sendcount;
             nread -= sendcount;
@@ -394,7 +440,7 @@ bool SftpClient::initSFTP()
     }
     while(sendcount > 0);
 
-    return sftpSuc;
+    return sendSuc;
 }
 
 void SftpClient::closeSFTP()
@@ -405,8 +451,13 @@ void SftpClient::closeSFTP()
 
 void SftpClient::closesession()
 {
-    libssh2_session_disconnect(session, "Normal Shutdown");
-    libssh2_session_free(session);
+    if(session != nullptr)
+    {
+        libssh2_session_disconnect(session, "Normal Shutdown");
+        libssh2_session_free(session);
+    }
+
+    session = nullptr;
 }
 
 void SftpClient::ScanSendDataFiles()
@@ -449,14 +500,12 @@ void SftpClient::ScanSendDataFiles()
         {
             if( sftp_sendfileInfolist.AddFile(sftp_sendfileInfo))
             {
-                logstr = QString("FTP전송 데이터 추가 : %1").arg(fpath);
-                log->write(logstr,LOG_NOTICE);  qDebug() <<  logstr;
+                logstr = QString("SFTP 전송 데이터 추가 : %1").arg(fpath);
+                log->write(logstr,LOG_NOTICE);
+                qDebug() <<  logstr;
 
             }
-            else DeleteFile(fpath);
         }
-        else
-            DeleteFile(fpath);
 
         if( sftp_sendfileInfolist.Count() > 30 )
         {
@@ -466,41 +515,8 @@ void SftpClient::ScanSendDataFiles()
 
     if( sftp_sendfileInfolist.Count() > 0)
     {
-        logstr = QString("SFTP전송 파일 리스트 : %1").arg(sftp_sendfileInfolist.Count());
-        log->write(logstr,LOG_NOTICE);  qDebug() <<  logstr;
-    }
-
-}
-
-void SftpClient::DeleteFile(QString filepath)
-{
-    try
-    {
-        QFile file(filepath);
-
-        try{
-            file.remove();
-        }
-        catch(exception ex)
-        {
-            qDebug() << ex.what();
-        }
-
-        /*
-        if(file.remove())
-        {
-            logstr = QString("SFTP 파일 삭제 : %1").arg(sftp_sendfileInfo.filename);
-            log->write(logstr,LOG_NOTICE);
-            qDebug() <<  logstr;
-            logappend(logstr);
-        }
-        else
-        {
-            logappend("No file");
-        }*/
-    }
-    catch( ... )
-    {
-        qDebug() << QString("DeleteFile exception");
+        logstr = QString("SFTP 전송 파일 리스트 : %1").arg(sftp_sendfileInfolist.Count());
+        log->write(logstr,LOG_NOTICE);
+        qDebug() <<  logstr;
     }
 }
