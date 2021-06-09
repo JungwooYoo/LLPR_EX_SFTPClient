@@ -7,6 +7,7 @@
 #include <QMutex>
 
 #include <QTextCodec>
+#include <QDirIterator>
 
 #include "syslogger.h"
 #include "dataclass.h"
@@ -72,7 +73,7 @@ private:
     LIBSSH2_SFTP_HANDLE *sftp_handle;
 
     QString logstr;
-    QString onlyfilename;
+    QString noCharfName;
 
     FtpClient::SendFileInfo sftp_sendfileInfo;
     FtpClient::SendFileInfoList sftp_sendfileInfolist;

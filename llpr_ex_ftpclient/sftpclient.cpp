@@ -80,26 +80,23 @@ void SftpClient::run()
                 msleep(1000);
                 continue;
             }
-
-            if(!connectSocket())
+            else if(!connectSocket())
             {
                 msleep(1000);
                 continue;
             }
-
-            if(!initSession())
+            else if(!initSession())
             {
                 msleep(1000);
                 continue;
             }
+            else
+            {
+                isRetry = false;
+            }
         }
 
-        if(config.protocol_type == CenterInfo::Remote)
-        {
-            msleep(500);
-            continue;
-        }
-        else if(sftp_sendfileInfolist.Count() == 0)
+        if(sftp_sendfileInfolist.Count() == 0)
         {
             ScanSendDataFiles();
             msleep(500);
@@ -107,8 +104,7 @@ void SftpClient::run()
             if(sftp_sendfileInfolist.Count() == 0)
                 continue;
         }
-
-        while(sftp_sendfileInfolist.Count() > 0)
+        else if(sftp_sendfileInfolist.Count() > 0)
         {
             sftp_sendfileInfo = sftp_sendfileInfolist.GetFirstFile();
             if(sftp_sendfileInfo.filename.isNull() || sftp_sendfileInfo.filename.isEmpty())
@@ -132,21 +128,30 @@ void SftpClient::run()
             lastTime = QDateTime::currentDateTime();
             QFile file(sftp_sendfileInfo.filepath);
             if(!file.open(QIODevice::ReadOnly))
-                continue;
-
-            QString fname = sftp_sendfileInfo.filename.mid(0, 1);   // H, X
-            QString rname = sftp_sendfileInfo.filename.mid(1);      // ~~~.jpg, ~~~.txt
-
-            if(sftp_sendfileInfo.filename.mid(0,1).compare("M") != 0)
             {
-                if(sftp_sendfileInfo.filename.mid(0,1).compare("H") == 0
-                        || sftp_sendfileInfo.filename.mid(0,1).compare("X") == 0)
-                    onlyfilename = rname;
-                else
-                    onlyfilename = sftp_sendfileInfo.filename;
+                continue;
+            }
+
+            QChar char1 = sftp_sendfileInfo.filename.at(0);
+            QChar char2 = sftp_sendfileInfo.filename.at(1);
+            QChar char3 = sftp_sendfileInfo.filename.at(2);
+
+            if(char3.isLetter() == true)
+            {
+                noCharfName = sftp_sendfileInfo.filename.mid(3);
+            }
+            else if(char2.isLetter() == true)
+            {
+                noCharfName = sftp_sendfileInfo.filename.mid(2);
+            }
+            else if (char1.isLetter() == true)
+            {
+                noCharfName = sftp_sendfileInfo.filename.mid(1);
             }
             else
-                onlyfilename = sftp_sendfileInfo.filename;
+            {
+                noCharfName = sftp_sendfileInfo.filename;
+            }
 
             fpath.append(sftp_sendfileInfo.filename);
             cvt = fpath.toLocal8Bit();
@@ -155,9 +160,14 @@ void SftpClient::run()
             local = fopen(localfile, "rb");
 
             if(!local)
+            {
                 logstr = QString("SFTP : 파일 열기 실패..");
+                continue;
+            }
             else
+            {
                 logstr = QString("SFTP : 파일 열기 성공!!");
+            }
 
             log->write(logstr,LOG_NOTICE);
             qDebug() << logstr;
@@ -185,7 +195,7 @@ void SftpClient::run()
 
                         if(attrs.filesize > 0)
                         {
-                            cvt = onlyfilename.toLocal8Bit();
+                            cvt = noCharfName.toLocal8Bit();
                             const char* srcname = cvt.data();
 
                             cvt = sftp_sendfileInfo.filename.toLocal8Bit();
@@ -195,23 +205,23 @@ void SftpClient::run()
 
                             if(m_iFTPRename == 0)
                             {
-                                logstr = QString("SFTP 파일 이름변경 성공!! : %1 -> %2").arg(rname).arg(sftp_sendfileInfo.filename);
+                                logstr = QString("SFTP 파일 이름변경 성공!! : %1 -> %2").arg(noCharfName).arg(sftp_sendfileInfo.filename);
                                 log->write(logstr,LOG_NOTICE); qDebug() << logstr;
                                 emit logappend(logstr);
                             }
                             else
                             {
-                                logstr = QString("SFTP 파일 이름변경 실패.. : %1 -> %2").arg(rname).arg(sftp_sendfileInfo.filename);
+                                logstr = QString("SFTP 파일 이름변경 실패.. : %1 -> %2").arg(noCharfName).arg(sftp_sendfileInfo.filename);
                                 log->write(logstr,LOG_NOTICE); qDebug() << logstr;
                                 emit logappend(logstr);
 
                                 // 동일 파일 삭제
-                                cvt = onlyfilename.toLocal8Bit();
+                                cvt = noCharfName.toLocal8Bit();
                                 const char* delfilename = cvt.data();
 
                                 libssh2_sftp_unlink(sftp_session, delfilename);
 
-                                logstr = QString("SFTP 동일 파일 삭제 : %1").arg(onlyfilename);
+                                logstr = QString("SFTP 동일 파일 삭제 : %1").arg(noCharfName);
                                 log->write(logstr,LOG_NOTICE); qDebug() << logstr;
                                 emit logappend(logstr);
                             }
@@ -245,8 +255,6 @@ void SftpClient::run()
                 isRetry = true;
             }
         }
-
-        libssh2_sftp_close(sftp_handle);
     }
 }
 
@@ -351,6 +359,7 @@ bool SftpClient::initSession()
         else
         {
             logstr = QString("SFTP : ID/PW 인증 성공!!");
+            sessionSuc = true;
         }
 
         log->write(logstr,LOG_NOTICE);
@@ -372,7 +381,7 @@ bool SftpClient::initSFTP()
     qDebug() << logstr;
     emit logappend(logstr);
 
-    QString Remotefilepath = QString("%1%2").arg(config.ftpPath).arg(onlyfilename);
+    QString Remotefilepath = QString("%1%2").arg(config.ftpPath).arg(noCharfName);
     QByteArray cvt;
     cvt = Remotefilepath.toLocal8Bit();
     const char* _sftppath = cvt.data();
@@ -480,7 +489,7 @@ void SftpClient::ScanSendDataFiles()
 
     QFileInfoList filepaths;
     sftp_sendfileInfolist.ClearAll();
-
+/*
     try
     {
         QStringList filters;
@@ -511,6 +520,42 @@ void SftpClient::ScanSendDataFiles()
         {
             break;
         }
+    }
+*/
+
+    QDirIterator dirIter(dir.absolutePath(), QDir::AllEntries | QDir::NoSymLinks | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    int filecount = 0;
+
+    try
+    {
+        while(dirIter.hasNext())
+        {
+            dirIter.next();
+            if(QFileInfo(dirIter.filePath()).isFile())
+            {
+                if(QFileInfo(dirIter.filePath()).suffix().toLower() == "jpg"
+                        || QFileInfo(dirIter.filePath()).suffix().toLower() == "jpeg"
+                        || QFileInfo(dirIter.filePath()).suffix().toLower() == "txt")
+                {
+                    filecount++;
+                    QString fpath = dirIter.fileInfo().absoluteFilePath();
+                    if(sftp_sendfileInfo.ParseFilepath(fpath))
+                    {
+                        sftp_sendfileInfolist.AddFile(sftp_sendfileInfo);
+                    }
+                    if(filecount > 10)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    catch( ... )
+    {
+        logstr = QString("ScanSendDataFiles-Search Entryile Exception : %1 %2").arg(__FILE__).arg(__LINE__);
+        log->write(logstr, LOG_NOTICE);
+        return;
     }
 
     if( sftp_sendfileInfolist.Count() > 0)

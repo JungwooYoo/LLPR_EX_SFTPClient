@@ -240,7 +240,7 @@ void MainWindow::connectcenter(int index)
     if(!psftpclient->isRunning())
     {
         psftpclient->start(commonvalues::center_list.value(index));
-        QString logstr = QString("FTP Connect : %1(ip:%2,port:%3,centerName:%4,ProtocolType:%5, FTP Retry:%6)").arg(index)
+        QString logstr = QString("SFTP Connect : %1(ip:%2,port:%3,centerName:%4,ProtocolType:%5, FTP Retry:%6)").arg(index)
                 .arg(psftpclient->config.ip).arg(psftpclient->config.ftpport).arg(psftpclient->config.centername)
                 .arg(psftpclient->config.protocol_type).arg(commonvalues::ftpretry);
         plog->write(logstr,LOG_NOTICE);
